@@ -148,6 +148,25 @@ const DataVis3D = () => {
       textMesh.position.set(0, 0, sphereSize + 0.1); // Position the text slightly in front of the sphere
       sphere.add(textMesh);
 
+      // Create text label for the back
+      const backTextCanvas = document.createElement('canvas');
+      const backTextCtx = backTextCanvas.getContext('2d')!;
+      backTextCanvas.width = 256;
+      backTextCanvas.height = 128;
+      backTextCtx.font = "40px Arial";
+      backTextCtx.fillStyle = "black";
+      backTextCtx.textAlign = "center";
+      backTextCtx.textBaseline = "middle";
+      backTextCtx.fillText(String(value), backTextCanvas.width / 2, backTextCanvas.height / 2);
+
+      const backTextTexture = new THREE.CanvasTexture(backTextCanvas);
+      const backTextMaterial = new THREE.MeshBasicMaterial({ map: backTextTexture, transparent: true });
+      const backTextGeometry = new THREE.PlaneGeometry(sphereSize * 2, sphereSize); // Adjust size as needed
+      const backTextMesh = new THREE.Mesh(backTextGeometry, backTextMaterial);
+      backTextMesh.position.set(0, 0, -(sphereSize + 0.1)); // Position the text slightly behind the sphere
+      backTextMesh.rotation.y = Math.PI; // Rotate the text 180 degrees
+      sphere.add(backTextMesh);
+
       sceneRef.current?.add(sphere);
       spheresRef.current.push(sphere);
     });
