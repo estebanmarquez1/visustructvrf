@@ -125,7 +125,12 @@ const DataVis3D = () => {
 
     // Create and add new spheres
     data.forEach((value, i) => {
-      const geometry = new THREE.SphereGeometry(sphereSize, 32, 32);
+      let geometry;
+      if (dataStructure === 'queue' || dataStructure === 'array') {
+        geometry = new THREE.BoxGeometry(sphereSize, sphereSize, sphereSize);
+      } else {
+        geometry = new THREE.SphereGeometry(sphereSize, 32, 32);
+      }
       const material = new THREE.MeshBasicMaterial({ color: 0x40E0D0 });
       const sphere = new THREE.Mesh(geometry, material);
       sphere.position.copy(positions[i]);
