@@ -129,6 +129,25 @@ const DataVis3D = () => {
       const material = new THREE.MeshBasicMaterial({ color: 0x40E0D0 });
       const sphere = new THREE.Mesh(geometry, material);
       sphere.position.copy(positions[i]);
+
+      // Create text label
+      const textCanvas = document.createElement('canvas');
+      const textCtx = textCanvas.getContext('2d')!;
+      textCanvas.width = 256;
+      textCanvas.height = 128;
+      textCtx.font = "40px Arial";
+      textCtx.fillStyle = "black";
+      textCtx.textAlign = "center";
+      textCtx.textBaseline = "middle";
+      textCtx.fillText(String(value), textCanvas.width / 2, textCanvas.height / 2);
+
+      const textTexture = new THREE.CanvasTexture(textCanvas);
+      const textMaterial = new THREE.MeshBasicMaterial({ map: textTexture, transparent: true });
+      const textGeometry = new THREE.PlaneGeometry(sphereSize * 2, sphereSize); // Adjust size as needed
+      const textMesh = new THREE.Mesh(textGeometry, textMaterial);
+      textMesh.position.set(0, 0, sphereSize + 0.1); // Position the text slightly in front of the sphere
+      sphere.add(textMesh);
+
       sceneRef.current?.add(sphere);
       spheresRef.current.push(sphere);
     });
