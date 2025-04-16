@@ -1,9 +1,8 @@
-
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
 import * as THREE from 'three';
-import Tone from 'tone';
+import * as Tone from 'tone';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
