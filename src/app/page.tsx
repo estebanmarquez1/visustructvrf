@@ -51,7 +51,7 @@ const DataVis3D = () => {
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     rendererRef.current = renderer;
-    renderer.setPixelRatio(window.devicePixelRatio); // Moved before setSize
+    renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(container.clientWidth, container.clientHeight);
     container.appendChild(renderer.domElement);
 
@@ -80,7 +80,6 @@ const DataVis3D = () => {
     const resizeObserver = new ResizeObserver(handleResize);
     resizeObserver.observe(container);
     
-    // Initial call to set size based on container, not window
     handleResize();
 
 
@@ -105,7 +104,7 @@ const DataVis3D = () => {
         sphere.geometry.dispose();
         (sphere.material as THREE.Material).dispose();
          sphere.children.forEach(child => {
-          if (child instanceof THREE.Mesh || child instanceof THREE.Sprite) { // Include Sprite
+          if (child instanceof THREE.Mesh || child instanceof THREE.Sprite) { 
             if ((child as THREE.Mesh).geometry) (child as THREE.Mesh).geometry.dispose();
             if ((child as THREE.Mesh).material) {
                  if (Array.isArray((child as THREE.Mesh).material)) {
@@ -184,30 +183,29 @@ const DataVis3D = () => {
         break;
     }
 
-    // Text label utility, modified to accept rotation instruction
-    const createTextSprite = (text: string, rotateOnCanvas: boolean = false) => {
+    const createTextSprite = (text: string, canvasRotationAngle: number = 0) => {
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d')!;
-        const fontSize = 40; // Base font size for texture
+        const fontSize = 40; 
         context.font = `${fontSize}px Arial`;
         const textWidth = context.measureText(text).width;
         
-        canvas.width = textWidth + 20; // Add some padding
-        canvas.height = fontSize + 10; // Add some padding
+        canvas.width = textWidth + 20; 
+        canvas.height = fontSize + 10; 
         
-        // Re-apply font and styles after canvas resize
         context.font = `${fontSize}px Arial`;
-        context.fillStyle = "rgba(0, 0, 0, 0.9)"; // Background for text
-        context.fillRect(0,0, canvas.width, canvas.height);
-        
-        context.fillStyle = "white"; // Text color
         context.textAlign = "center";
         context.textBaseline = "middle";
 
-        if (rotateOnCanvas) {
+        context.fillStyle = "rgba(0, 0, 0, 0.9)"; 
+        context.fillRect(0,0, canvas.width, canvas.height);
+        
+        context.fillStyle = "white";
+
+        if (canvasRotationAngle !== 0) {
             context.save();
             context.translate(canvas.width / 2, canvas.height / 2);
-            context.rotate(Math.PI); // Rotate 180 degrees
+            context.rotate(canvasRotationAngle); 
             context.fillText(text, 0, 0);
             context.restore();
         } else {
@@ -215,6 +213,7 @@ const DataVis3D = () => {
         }
 
         const texture = new THREE.CanvasTexture(canvas);
+        texture.needsUpdate = true;
         const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
         const sprite = new THREE.Sprite(spriteMaterial);
         
@@ -225,20 +224,18 @@ const DataVis3D = () => {
 
     currentData.forEach((value, i) => {
       let geometry;
-      // All structures use BoxGeometry now as per previous update
       geometry = new THREE.BoxGeometry(elementSize, elementSize, elementSize);
       
       const material = new THREE.MeshStandardMaterial({ color: 0x40E0D0, roughness: 0.5, metalness: 0.1 });
       const elementMesh = new THREE.Mesh(geometry, material);
       elementMesh.position.copy(positions[i]);
       
-      const textSprite = createTextSprite(String(value), false); // Front: no rotation on canvas
+      const textSprite = createTextSprite(String(value), 0); 
       textSprite.position.set(0, 0, elementSize / 2 + 0.1); 
       elementMesh.add(textSprite);
 
-      const textSpriteBack = createTextSprite(String(value), true); // Back: text rotated 180 on canvas
+      const textSpriteBack = createTextSprite(String(value), Math.PI / 2); // Rotate +90 degrees for back
       textSpriteBack.position.set(0, 0, -(elementSize / 2 + 0.1)); 
-      // No material.rotation needed here as text is pre-rotated on canvas
       elementMesh.add(textSpriteBack);
 
       sceneRef.current?.add(elementMesh);
@@ -292,21 +289,19 @@ const DataVis3D = () => {
   useEffect(() => {
     if (isPlaying) {
       const animateLoop = () => {
-        if (!isPlayingRef.current || data.length === 0) { // Stop if not playing or data is empty
-            if(data.length === 0 && isPlayingRef.current){ // If playing but data became empty, stop
-                setIsPlaying(false); // This will trigger cleanup via isPlayingRef.current check
+        if (!isPlayingRef.current || data.length === 0) { 
+            if(data.length === 0 && isPlayingRef.current){ 
+                setIsPlaying(false); 
             }
             return;
         }
         
-        handleRemove(); // This updates data and will trigger its own useEffect for updateSpheres
+        handleRemove(); 
 
         animationTimeoutRef.current = setTimeout(() => {
           if (isPlayingRef.current) { 
             const randomValue = Math.floor(Math.random() * 20) + 1; 
             
-            // This logic directly modifies data, then plays sound.
-            // setData will trigger updateSpheres via its own useEffect.
             setData(prevData => {
                  if (dataStructure === 'stack') {
                     return [...prevData, randomValue];
@@ -314,15 +309,15 @@ const DataVis3D = () => {
                     return [...prevData, randomValue];
                 }
             });
-            playSound(randomValue); // Play sound for the added value
+            playSound(randomValue); 
             animateLoop(); 
           }
         }, 2000 / animationSpeed);
       };
-      if (data.length > 0) { // Only start loop if there's data
+      if (data.length > 0) { 
         animateLoop();
       } else {
-        setIsPlaying(false); // Auto-stop if trying to play with no data
+        setIsPlaying(false); 
       }
     } else {
       if (animationTimeoutRef.current) {
@@ -336,14 +331,13 @@ const DataVis3D = () => {
         clearTimeout(animationTimeoutRef.current);
       }
     };
-  }, [isPlaying, animationSpeed, dataStructure, handleRemove, playSound, data.length]); // Added data.length
+  }, [isPlaying, animationSpeed, dataStructure, handleRemove, playSound, data.length]); 
 
 
   const startAnimation = () => {
-    if (data.length > 0) { // Prevent starting animation if no data
+    if (data.length > 0) { 
       setIsPlaying(true);
     } else {
-        // Optionally, provide feedback to the user that they need to insert data first
         console.log("Cannot start animation with empty data set.");
     }
   };
