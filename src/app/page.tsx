@@ -14,8 +14,8 @@ import { Input } from "@/components/ui/input";
 
 const DataVis3D = () => {
   const [dataStructure, setDataStructure] = useState('queue');
-  const [sphereSize, setSphereSize] = useState(1);
-  const [sphereSpacing, setSphereSpacing] = useState(3);
+  const [elementSize, setElementSize] = useState(1);
+  const [elementSpacing, setElementSpacing] = useState(3);
   const [animationSpeed, setAnimationSpeed] = useState(1);
   const [data, setData] = useState<number[]>([1, 2, 3, 4, 5]);
   const [inputValue, setInputValue] = useState('');
@@ -24,12 +24,12 @@ const DataVis3D = () => {
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
-  const spheresRef = useRef<THREE.Mesh[]>([]);
+  const spheresRef = useRef<THREE.Mesh[]>([]); // Renamed to elementsRef for clarity
   const controlsRef = useRef<OrbitControls | null>(null);
   const synthRef = useRef<Tone.Synth | null>(null);
 
   const [isPlaying, setIsPlaying] = useState(false);
-  const isPlayingRef = useRef(isPlaying); // Ref for animation loop closure
+  const isPlayingRef = useRef(isPlaying);
   const animationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -43,7 +43,7 @@ const DataVis3D = () => {
 
     const scene = new THREE.Scene();
     sceneRef.current = scene;
-    scene.background = new THREE.Color(0xf0f0f0); // Lighter background for better visibility
+    scene.background = new THREE.Color(0xf0f0f0);
 
     const camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
     cameraRef.current = camera;
@@ -51,8 +51,8 @@ const DataVis3D = () => {
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     rendererRef.current = renderer;
+    renderer.setPixelRatio(window.devicePixelRatio); // Moved before setSize
     renderer.setSize(container.clientWidth, container.clientHeight);
-    renderer.setPixelRatio(window.devicePixelRatio);
     container.appendChild(renderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -69,15 +69,20 @@ const DataVis3D = () => {
 
     const handleResize = () => {
       if (cameraRef.current && rendererRef.current && container) {
-        cameraRef.current.aspect = container.clientWidth / container.clientHeight;
+        const width = container.clientWidth;
+        const height = container.clientHeight;
+        cameraRef.current.aspect = width / height;
         cameraRef.current.updateProjectionMatrix();
-        rendererRef.current.setSize(container.clientWidth, container.clientHeight);
+        rendererRef.current.setSize(width, height);
       }
     };
 
     const resizeObserver = new ResizeObserver(handleResize);
     resizeObserver.observe(container);
-    handleResize(); // Initial call
+    
+    // Initial call to set size based on container, not window
+    handleResize();
+
 
     let animationFrameId: number;
     const animate = () => {
@@ -100,9 +105,21 @@ const DataVis3D = () => {
         sphere.geometry.dispose();
         (sphere.material as THREE.Material).dispose();
          sphere.children.forEach(child => {
-          if (child instanceof THREE.Mesh) {
-            child.geometry.dispose();
-            (child.material as THREE.Material).dispose();
+          if (child instanceof THREE.Mesh || child instanceof THREE.Sprite) { // Include Sprite
+            if ((child as THREE.Mesh).geometry) (child as THREE.Mesh).geometry.dispose();
+            if ((child as THREE.Mesh).material) {
+                 if (Array.isArray((child as THREE.Mesh).material)) {
+                    ((child as THREE.Mesh).material as THREE.Material[]).forEach(m => m.dispose());
+                 } else {
+                    ((child as THREE.Mesh).material as THREE.Material).dispose();
+                 }
+            }
+             if ((child as THREE.Sprite).material?.map) {
+                ((child as THREE.Sprite).material.map as THREE.Texture).dispose();
+             }
+             if ((child as THREE.Sprite).material) {
+                (child as THREE.Sprite).material.dispose();
+             }
           }
         });
       });
@@ -113,13 +130,12 @@ const DataVis3D = () => {
   const playSound = useCallback((value: number) => {
     if (!synthRef.current) return;
     try {
-      const note = Tone.Frequency(value * 50 + 200, "hz").toNote(); // Adjusted frequency mapping
+      const note = Tone.Frequency(value * 50 + 200, "hz").toNote();
       synthRef.current.triggerAttackRelease(note, "8n", Tone.now());
     } catch (error) {
       console.error("Error playing sound:", error);
     }
   }, []);
-
 
   const updateSpheres = useCallback((currentData: number[]) => {
     if (!sceneRef.current || !cameraRef.current) return;
@@ -129,9 +145,21 @@ const DataVis3D = () => {
       sphere.geometry.dispose();
       (sphere.material as THREE.Material).dispose();
       sphere.children.forEach(child => {
-        if (child instanceof THREE.Mesh) {
-          child.geometry.dispose();
-          (child.material as THREE.Material).dispose();
+        if (child instanceof THREE.Mesh || child instanceof THREE.Sprite) {
+          if ((child as THREE.Mesh).geometry) (child as THREE.Mesh).geometry.dispose();
+           if ((child as THREE.Mesh).material) {
+             if (Array.isArray((child as THREE.Mesh).material)) {
+                ((child as THREE.Mesh).material as THREE.Material[]).forEach(m => m.dispose());
+             } else {
+                ((child as THREE.Mesh).material as THREE.Material).dispose();
+             }
+           }
+           if ((child as THREE.Sprite).material?.map) {
+              ((child as THREE.Sprite).material.map as THREE.Texture).dispose();
+           }
+           if ((child as THREE.Sprite).material) {
+              (child as THREE.Sprite).material.dispose();
+           }
         }
       });
     });
@@ -140,77 +168,84 @@ const DataVis3D = () => {
     if (currentData.length === 0) return;
 
     let positions: THREE.Vector3[] = [];
-    const totalWidth = (currentData.length -1) * sphereSpacing;
+    const totalWidth = (currentData.length -1) * elementSpacing;
     const startX = -totalWidth / 2;
 
     switch (dataStructure) {
       case 'queue':
       case 'array':
-        positions = currentData.map((_, i) => new THREE.Vector3(startX + i * sphereSpacing, 0, 0));
+        positions = currentData.map((_, i) => new THREE.Vector3(startX + i * elementSpacing, 0, 0));
         break;
       case 'stack':
-        positions = currentData.map((_, i) => new THREE.Vector3(0, i * sphereSpacing - ((currentData.length -1) * sphereSpacing)/2 , 0));
+        positions = currentData.map((_, i) => new THREE.Vector3(0, i * elementSpacing - ((currentData.length -1) * elementSpacing)/2 , 0));
         break;
       default:
-        positions = currentData.map((_, i) => new THREE.Vector3(startX + i * sphereSpacing, 0, 0));
+        positions = currentData.map((_, i) => new THREE.Vector3(startX + i * elementSpacing, 0, 0));
         break;
     }
 
-    currentData.forEach((value, i) => {
-      let geometry;
-      if (dataStructure === 'queue' || dataStructure === 'array') {
-        geometry = new THREE.BoxGeometry(sphereSize, sphereSize, sphereSize);
-      } else { // Stack
-        geometry = new THREE.BoxGeometry(sphereSize, sphereSize, sphereSize); // Using cubes for stack too for consistency
-      }
-      const material = new THREE.MeshStandardMaterial({ color: 0x40E0D0, roughness: 0.5, metalness: 0.1 });
-      const elementMesh = new THREE.Mesh(geometry, material);
-      elementMesh.position.copy(positions[i]);
-
-      // Text label utility
-      const createTextSprite = (text: string) => {
+    // Text label utility, modified to accept rotation instruction
+    const createTextSprite = (text: string, rotateOnCanvas: boolean = false) => {
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d')!;
-        const fontSize = 40;
+        const fontSize = 40; // Base font size for texture
         context.font = `${fontSize}px Arial`;
         const textWidth = context.measureText(text).width;
         
         canvas.width = textWidth + 20; // Add some padding
         canvas.height = fontSize + 10; // Add some padding
         
-        // Re-apply font after canvas resize
+        // Re-apply font and styles after canvas resize
         context.font = `${fontSize}px Arial`;
-        context.fillStyle = "rgba(0, 0, 0, 0.9)"; // Slightly transparent background for text
+        context.fillStyle = "rgba(0, 0, 0, 0.9)"; // Background for text
         context.fillRect(0,0, canvas.width, canvas.height);
-        context.fillStyle = "white";
+        
+        context.fillStyle = "white"; // Text color
         context.textAlign = "center";
         context.textBaseline = "middle";
-        context.fillText(text, canvas.width / 2, canvas.height / 2);
+
+        if (rotateOnCanvas) {
+            context.save();
+            context.translate(canvas.width / 2, canvas.height / 2);
+            context.rotate(Math.PI); // Rotate 180 degrees
+            context.fillText(text, 0, 0);
+            context.restore();
+        } else {
+            context.fillText(text, canvas.width / 2, canvas.height / 2);
+        }
 
         const texture = new THREE.CanvasTexture(canvas);
         const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
         const sprite = new THREE.Sprite(spriteMaterial);
-        // Scale sprite appropriately. Factor depends on sphereSize and desired text visibility.
-        const scaleFactor = sphereSize * 0.75;
-        sprite.scale.set(canvas.width/fontSize * scaleFactor, canvas.height/fontSize * scaleFactor, 1);
+        
+        const scaleFactor = elementSize * 0.75;
+        sprite.scale.set( (canvas.width / fontSize) * scaleFactor, (canvas.height / fontSize) * scaleFactor, 1 );
         return sprite;
-      };
+    };
+
+    currentData.forEach((value, i) => {
+      let geometry;
+      // All structures use BoxGeometry now as per previous update
+      geometry = new THREE.BoxGeometry(elementSize, elementSize, elementSize);
       
-      const textSprite = createTextSprite(String(value));
-      textSprite.position.set(0, 0, sphereSize / 2 + 0.1); // In front
+      const material = new THREE.MeshStandardMaterial({ color: 0x40E0D0, roughness: 0.5, metalness: 0.1 });
+      const elementMesh = new THREE.Mesh(geometry, material);
+      elementMesh.position.copy(positions[i]);
+      
+      const textSprite = createTextSprite(String(value), false); // Front: no rotation on canvas
+      textSprite.position.set(0, 0, elementSize / 2 + 0.1); 
       elementMesh.add(textSprite);
 
-      const textSpriteBack = createTextSprite(String(value));
-      textSpriteBack.position.set(0, 0, -(sphereSize / 2 + 0.1)); // Behind
-      textSpriteBack.material.rotation = Math.PI; // Rotate texture on sprite for back view (alternative to rotating sprite itself)
+      const textSpriteBack = createTextSprite(String(value), true); // Back: text rotated 180 on canvas
+      textSpriteBack.position.set(0, 0, -(elementSize / 2 + 0.1)); 
+      // No material.rotation needed here as text is pre-rotated on canvas
       elementMesh.add(textSpriteBack);
-
 
       sceneRef.current?.add(elementMesh);
       spheresRef.current.push(elementMesh);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataStructure, sphereSize, sphereSpacing]); // Removed data dependency, will call with data manually
+  }, [dataStructure, elementSize, elementSpacing]); 
 
 
   useEffect(() => {
@@ -224,9 +259,9 @@ const DataVis3D = () => {
     if (isNaN(newValue)) return;
     
     if (dataStructure === 'stack') {
-        setData(prevData => [...prevData, newValue]); // Push for stack
-    } else { // Queue or Array
-        setData(prevData => [...prevData, newValue]); // Enqueue or add to end for Array
+        setData(prevData => [...prevData, newValue]); 
+    } else { 
+        setData(prevData => [...prevData, newValue]); 
     }
     setInputValue('');
     playSound(newValue);
@@ -241,7 +276,7 @@ const DataVis3D = () => {
       if (dataStructure === 'stack') {
         removedValue = prevData[prevData.length - 1];
         newData = prevData.slice(0, -1);
-      } else { // 'queue' or 'array' - remove from the beginning
+      } else { 
         removedValue = prevData[0];
         newData = prevData.slice(1);
       }
@@ -254,31 +289,41 @@ const DataVis3D = () => {
     setInputValue(e.target.value);
   };
 
-  // Animation Loop Effect
   useEffect(() => {
     if (isPlaying) {
       const animateLoop = () => {
-        handleRemove();
+        if (!isPlayingRef.current || data.length === 0) { // Stop if not playing or data is empty
+            if(data.length === 0 && isPlayingRef.current){ // If playing but data became empty, stop
+                setIsPlaying(false); // This will trigger cleanup via isPlayingRef.current check
+            }
+            return;
+        }
+        
+        handleRemove(); // This updates data and will trigger its own useEffect for updateSpheres
 
         animationTimeoutRef.current = setTimeout(() => {
-          if (isPlayingRef.current) { // Check ref for current state
-            const randomValue = Math.floor(Math.random() * 20) + 1; // Values 1-20
+          if (isPlayingRef.current) { 
+            const randomValue = Math.floor(Math.random() * 20) + 1; 
+            
+            // This logic directly modifies data, then plays sound.
+            // setData will trigger updateSpheres via its own useEffect.
             setData(prevData => {
                  if (dataStructure === 'stack') {
-                    return [...prevData, randomValue]; // Push
-                } else { // Queue or Array
-                    return [...prevData, randomValue]; // Enqueue or add to end
+                    return [...prevData, randomValue];
+                } else { 
+                    return [...prevData, randomValue];
                 }
             });
-            // playSound is called by setData's effect via handleRemove or by direct calls that modify data.
-            // We need to ensure playSound is called for additions too.
-            // Let's call playSound here explicitly for the added value.
-            playSound(randomValue);
+            playSound(randomValue); // Play sound for the added value
             animateLoop(); 
           }
         }, 2000 / animationSpeed);
       };
-      animateLoop();
+      if (data.length > 0) { // Only start loop if there's data
+        animateLoop();
+      } else {
+        setIsPlaying(false); // Auto-stop if trying to play with no data
+      }
     } else {
       if (animationTimeoutRef.current) {
         clearTimeout(animationTimeoutRef.current);
@@ -286,15 +331,22 @@ const DataVis3D = () => {
       }
     }
 
-    return () => { // Cleanup for when component unmounts or dependencies change
+    return () => { 
       if (animationTimeoutRef.current) {
         clearTimeout(animationTimeoutRef.current);
       }
     };
-  }, [isPlaying, animationSpeed, dataStructure, handleRemove, playSound]);
+  }, [isPlaying, animationSpeed, dataStructure, handleRemove, playSound, data.length]); // Added data.length
 
 
-  const startAnimation = () => setIsPlaying(true);
+  const startAnimation = () => {
+    if (data.length > 0) { // Prevent starting animation if no data
+      setIsPlaying(true);
+    } else {
+        // Optionally, provide feedback to the user that they need to insert data first
+        console.log("Cannot start animation with empty data set.");
+    }
+  };
   const stopAnimation = () => setIsPlaying(false);
 
   return (
@@ -329,11 +381,11 @@ const DataVis3D = () => {
                 <Label htmlFor="element-size">Element Size</Label>
                 <Slider
                   id="element-size"
-                  defaultValue={[sphereSize]}
+                  defaultValue={[elementSize]}
                   min={0.5}
                   max={3}
                   step={0.1}
-                  onValueChange={(value) => setSphereSize(value[0])}
+                  onValueChange={(value) => setElementSize(value[0])}
                 />
               </div>
 
@@ -341,11 +393,11 @@ const DataVis3D = () => {
                 <Label htmlFor="element-spacing">Element Spacing</Label>
                 <Slider
                   id="element-spacing"
-                  defaultValue={[sphereSpacing]}
+                  defaultValue={[elementSpacing]}
                   min={1}
                   max={10}
                   step={0.1}
-                  onValueChange={(value) => setSphereSpacing(value[0])}
+                  onValueChange={(value) => setElementSpacing(value[0])}
                 />
               </div>
 
@@ -380,7 +432,7 @@ const DataVis3D = () => {
                 {isPlaying ? (
                   <Button onClick={stopAnimation} variant="destructive">Stop</Button>
                 ) : (
-                  <Button onClick={startAnimation} variant="secondary">Play</Button>
+                  <Button onClick={startAnimation} variant="secondary" disabled={data.length === 0}>Play</Button>
                 )}
               </div>
             </CardContent>
@@ -400,5 +452,3 @@ const DataVis3D = () => {
 };
 
 export default DataVis3D;
-
-    
